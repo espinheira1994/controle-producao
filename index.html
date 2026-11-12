@@ -62,13 +62,17 @@ h1 span { color: var(--accent); }
   .arrow { display: none; }
 }
 
-.add { display: flex; gap: 8px; }
-.add input {
+.add, .nome-form { display: flex; flex-wrap: wrap; gap: 8px; }
+.add #titulo { flex: 1 1 240px; }
+.add #autor { flex: 0 1 180px; }
+.nome-form input { flex: 1 1 160px; }
+.add input, .nome-form input {
   flex: 1; min-width: 0; font: inherit; padding: 9px 12px;
   background: var(--surface); color: var(--ink);
   border: 1px solid var(--line); border-radius: 8px;
 }
-.add input::placeholder { color: var(--muted); }
+.add input::placeholder, .nome-form input::placeholder { color: var(--muted); }
+.espera { font-size: .875rem; font-weight: 600; color: var(--test); }
 
 .btn {
   font: 600 .875rem/1 var(--f-body); min-height: 40px; padding: 0 14px; cursor: pointer; white-space: nowrap;
@@ -125,8 +129,11 @@ h1 span { color: var(--accent); }
   <form id="add" class="add" autocomplete="off" hidden>
     <label class="sr" for="titulo">Nova pendência</label>
     <input id="titulo" name="titulo" maxlength="200" placeholder="Nova pendência…" required>
+    <label class="sr" for="autor">Seu nome</label>
+    <input id="autor" name="autor" list="nomes" maxlength="40" pattern=".*\S.*" placeholder="Seu nome" required>
     <button class="btn primary" type="submit">Adicionar</button>
   </form>
+  <datalist id="nomes"></datalist>
 
   <p id="msg" class="msg" role="status" aria-live="polite">Carregando tarefas…</p>
 
@@ -156,7 +163,11 @@ const ETAPAS = {
 };
 // chave pública (anon): o acesso é livre com o link, escolha do usuário
 const sb = supabase.createClient('https://htmyouchcethefvrygpk.supabase.co', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh0bXlvdWNoY2V0aGVmdnJ5Z3BrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQyOTQ2NTQsImV4cCI6MjEwOTg3MDY1NH0.NACTRMN9mB8uCdSH4Gf5zy_oYhxT5CakFA1oDpIHvx8');
-let tab = 'pendente', tasks = [], loaded = false, confirming = null, confirmTimer;
+let tab = 'pendente', tasks = [], loaded = false, confirming = null, confirmTimer, naming = null, nomeDraft = '';
+// último nome usado neste computador, para pré-preencher os campos
+const NOME = 'controle-producao-nome';
+const lembrado = () => { try { return localStorage.getItem(NOME) || ''; } catch { return ''; } };
+const lembrar = n => { try { localStorage.setItem(NOME, n); } catch {} };
 const busy = new Set();
 const $ = s => document.querySelector(s);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
@@ -171,9 +182,21 @@ function dur(ms) {
 console.assert(dur(0) === 'menos de 1 min' && dur(5 * 60000) === '5 min' && dur(90 * 60000) === '1 h' && dur(26 * 3600000) === '1 d 2 h', 'dur()');
 const data = ts => new Date(ts).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 
+// testador em pendência = quem reprovou; em concluído = quem aprovou
+function quem(t) {
+  if (t.status === 'teste') return t.testador ? ['testando: ' + t.testador] : [];
+  return [t.autor && 'criada por ' + t.autor, t.testador && (t.status === 'pendente' ? 'reprovada por ' : 'testada por ') + t.testador].filter(Boolean);
+}
+console.assert(quem({ status: 'pendente', autor: 'Ana', testador: 'Bia' }).join('|') === 'criada por Ana|reprovada por Bia'
+  && quem({ status: 'pendente', autor: null, testador: null }).length === 0
+  && quem({ status: 'teste', testador: null }).length === 0
+  && quem({ status: 'concluido', autor: 'Ana', testador: 'Bia' })[1] === 'testada por Bia', 'quem()');
+
 function meta(t, now) {
-  if (t.status === 'concluido') return 'concluída ' + data(t.desde) + ' · ciclo de ' + dur(t.desde - t.criado);
-  return 'há ' + dur(now - t.desde) + ' nesta etapa · criada ' + data(t.criado);
+  const tempo = t.status === 'concluido'
+    ? 'concluída ' + data(t.desde) + ' · ciclo de ' + dur(t.desde - t.criado)
+    : 'há ' + dur(now - t.desde) + ' nesta etapa · criada ' + data(t.criado);
+  return [...quem(t), tempo].join(' · ');
 }
 
 function say(text, retry) {
@@ -184,7 +207,7 @@ function say(text, retry) {
 }
 
 async function carregar() {
-  const { data: rows, error } = await sb.from('tarefas').select('id,titulo,status,criado,desde');
+  const { data: rows, error } = await sb.from('tarefas').select('id,titulo,status,criado,desde,autor,testador');
   if (error) { say(loaded ? 'Sem conexão: a lista pode estar desatualizada.' : 'Não foi possível carregar a lista. Verifique a internet.', carregar); return; }
   tasks = rows; loaded = true; say(''); render();
 }
@@ -198,14 +221,41 @@ async function write(id, fn) {
   await carregar();
 }
 
-const mover = (id, status) => write(id, () => sb.from('tarefas').update({ status, desde: Date.now() }).eq('id', id));
+const mover = (id, status, extra) => write(id, () => sb.from('tarefas').update({ status, desde: Date.now(), ...extra }).eq('id', id));
 const excluir = id => write(id, () => sb.from('tarefas').delete().eq('id', id));
+const nomear = id => { naming = id; nomeDraft = lembrado(); confirming = null; render(); };
+
+// campo inline de "Assumir teste" / "Trocar testador"
+function nomeForm(t) {
+  const f = el('form', 'nome-form');
+  f.autocomplete = 'off';
+  const inp = el('input');
+  inp.id = 'nome-teste'; inp.maxLength = 40; inp.required = true; inp.pattern = '.*\\S.*';
+  inp.placeholder = 'Quem vai testar'; inp.setAttribute('aria-label', 'Quem vai testar'); inp.setAttribute('list', 'nomes');
+  inp.value = nomeDraft;
+  inp.oninput = () => { nomeDraft = inp.value; };
+  const ok = el('button', 'btn primary', 'Confirmar'); ok.type = 'submit';
+  const no = el('button', 'btn', 'Cancelar'); no.type = 'button';
+  no.onclick = () => { naming = null; render(); };
+  f.onkeydown = e => { if (e.key === 'Escape') no.click(); };
+  f.onsubmit = e => {
+    e.preventDefault();
+    const nome = inp.value.trim();
+    lembrar(nome); naming = null;
+    write(t.id, () => sb.from('tarefas').update({ testador: nome }).eq('id', t.id));
+  };
+  f.append(inp, ok, no);
+  return f;
+}
 
 function row(t, now) {
   const li = el('li', 'item');
   const txt = el('div', 'txt');
-  txt.append(el('div', 'ttl', t.titulo), el('div', 'meta', meta(t, now)));
+  txt.append(el('div', 'ttl', t.titulo));
+  if (t.status === 'teste' && !t.testador) txt.append(el('div', 'espera', 'Aguardando testador'));
+  txt.append(el('div', 'meta', meta(t, now)));
   li.append(txt);
+  if (naming === t.id) { li.append(nomeForm(t)); return li; }
 
   const acts = el('div', 'acts');
   const btn = (label, cls, onclick) => {
@@ -213,9 +263,14 @@ function row(t, now) {
     b.type = 'button'; b.disabled = busy.has(t.id); b.onclick = onclick;
     acts.append(b); return b;
   };
-  if (t.status === 'pendente') btn('Enviar para teste', 'primary', () => mover(t.id, 'teste'));
-  if (t.status === 'teste') { btn('Aprovar', 'ok', () => mover(t.id, 'concluido')); btn('Reprovar', '', () => mover(t.id, 'pendente')); }
-  if (t.status === 'concluido') btn('Reabrir', '', () => mover(t.id, 'pendente'));
+  if (t.status === 'pendente') btn('Enviar para teste', 'primary', () => mover(t.id, 'teste', { testador: null }));
+  if (t.status === 'teste' && !t.testador) btn('Assumir teste', 'primary', () => nomear(t.id));
+  if (t.status === 'teste' && t.testador) {
+    btn('Aprovar', 'ok', () => mover(t.id, 'concluido'));
+    btn('Reprovar', '', () => mover(t.id, 'pendente')); // mantém o testador para mostrar "reprovada por"
+    btn('Trocar testador', '', () => nomear(t.id));
+  }
+  if (t.status === 'concluido') btn('Reabrir', '', () => mover(t.id, 'pendente', { testador: null }));
 
   const armed = confirming === t.id;
   const del = btn(armed ? 'Confirmar exclusão' : 'Excluir', 'del' + (armed ? ' armed' : ''), () => {
@@ -246,17 +301,27 @@ function render() {
   $('#list').replaceChildren(...rows.map(t => row(t, now)));
   $('#vazio').textContent = ETAPAS[tab].vazio;
   $('#vazio').hidden = !loaded || rows.length > 0;
+
+  const nomes = [...new Set(tasks.flatMap(t => [t.autor, t.testador]).filter(Boolean))].sort();
+  $('#nomes').replaceChildren(...nomes.map(n => { const o = el('option'); o.value = n; return o; }));
+
+  // o re-render recria o campo de nome; devolve o foco se ele se perdeu
+  const campo = $('#nome-teste');
+  if (naming && !campo) naming = null;
+  else if (campo && document.activeElement === document.body) campo.focus();
 }
 
-document.querySelectorAll('.tab').forEach(b => b.onclick = () => { tab = b.dataset.s; confirming = null; render(); });
+document.querySelectorAll('.tab').forEach(b => b.onclick = () => { tab = b.dataset.s; confirming = null; naming = null; render(); });
+$('#autor').value = lembrado();
 
 $('#add').onsubmit = async e => {
   e.preventDefault();
-  const inp = $('#titulo'), titulo = inp.value.trim();
-  if (!titulo) return;
+  const inp = $('#titulo'), titulo = inp.value.trim(), autor = $('#autor').value.trim();
+  if (!titulo || !autor) return;
+  lembrar(autor);
   const now = Date.now();
   inp.value = ''; tab = 'pendente';
-  const { error } = await sb.from('tarefas').insert({ titulo, status: 'pendente', criado: now, desde: now });
+  const { error } = await sb.from('tarefas').insert({ titulo, autor, status: 'pendente', criado: now, desde: now });
   if (error) { inp.value = titulo; say('Não foi possível salvar. Verifique a internet e tente de novo.'); }
   await carregar();
 };
