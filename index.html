@@ -232,38 +232,46 @@ async function write(id, fn) {
 const mover = (id, status, extra) => write(id, () => sb.from('tarefas').update({ status, desde: Date.now(), ...extra }).eq('id', id));
 const excluir = id => write(id, () => sb.from('tarefas').delete().eq('id', id));
 const CAMPOS = {
-  testador: { label: 'Quem vai testar', max: 40, nomes: true },
-  titulo: { label: 'Título da tarefa', max: 200 },
+  testador: [{ k: 'testador', label: 'Quem vai testar', max: 40, nomes: true }],
+  editar: [
+    { k: 'titulo', label: 'Título da tarefa', max: 200 },
+    { k: 'autor', label: 'Criada por (vazio = sem nome)', max: 40, nomes: true, opcional: true },
+  ],
 };
-const abrir = (t, campo) => {
-  editando = { id: t.id, campo };
-  draft = campo === 'titulo' ? t.titulo : lembrado();
+const abrir = (t, modo) => {
+  editando = { id: t.id, modo };
+  draft = modo === 'editar' ? { titulo: t.titulo, autor: t.autor || '' } : { testador: lembrado() };
   confirming = null; render();
 };
 
-// campo inline de "Editar", "Assumir teste" e "Trocar testador"
+// campos inline de "Editar", "Assumir teste" e "Trocar testador"
 function campoForm(t) {
-  const { campo } = editando, c = CAMPOS[campo];
+  const { modo } = editando;
   const f = el('form', 'nome-form');
   f.autocomplete = 'off';
-  const inp = el('input');
-  inp.id = 'campo-inline'; inp.maxLength = c.max; inp.required = true; inp.pattern = '.*\\S.*';
-  inp.placeholder = c.label; inp.setAttribute('aria-label', c.label);
-  if (c.nomes) inp.setAttribute('list', 'nomes');
-  inp.value = draft;
-  inp.oninput = () => { draft = inp.value; };
-  const ok = el('button', 'btn primary', campo === 'titulo' ? 'Salvar' : 'Confirmar'); ok.type = 'submit';
+  const inputs = CAMPOS[modo].map((c, i) => {
+    const inp = el('input');
+    if (i === 0) inp.id = 'campo-inline';
+    inp.dataset.k = c.k; inp.maxLength = c.max; inp.required = !c.opcional;
+    inp.pattern = '.*\\S.*'; // vazio só passa no opcional; só espaços nunca
+    inp.placeholder = c.label; inp.setAttribute('aria-label', c.label);
+    if (c.nomes) inp.setAttribute('list', 'nomes');
+    inp.value = draft[c.k];
+    inp.oninput = () => { draft[c.k] = inp.value; };
+    return inp;
+  });
+  const ok = el('button', 'btn primary', modo === 'editar' ? 'Salvar' : 'Confirmar'); ok.type = 'submit';
   const no = el('button', 'btn', 'Cancelar'); no.type = 'button';
   no.onclick = () => { editando = null; render(); };
   f.onkeydown = e => { if (e.key === 'Escape') no.click(); };
   f.onsubmit = e => {
     e.preventDefault();
-    const valor = inp.value.trim();
-    if (campo === 'testador') lembrar(valor);
+    const dados = Object.fromEntries(inputs.map(i => [i.dataset.k, i.value.trim() || null]));
+    if (modo === 'testador') lembrar(dados.testador);
     editando = null;
-    write(t.id, () => sb.from('tarefas').update({ [campo]: valor }).eq('id', t.id));
+    write(t.id, () => sb.from('tarefas').update(dados).eq('id', t.id));
   };
-  f.append(inp, ok, no);
+  f.append(...inputs, ok, no);
   return f;
 }
 
@@ -290,7 +298,7 @@ function row(t, now) {
     btn('Trocar testador', '', () => abrir(t, 'testador'));
   }
   if (t.status === 'concluido') btn('Reabrir', '', () => mover(t.id, 'pendente', { testador: null }));
-  btn('Editar', '', () => abrir(t, 'titulo'));
+  btn('Editar', '', () => abrir(t, 'editar'));
 
   const armed = confirming === t.id;
   const del = btn(armed ? 'Confirmar exclusão' : 'Excluir', 'del' + (armed ? ' armed' : ''), () => {
