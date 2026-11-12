@@ -66,7 +66,9 @@ h1 span { color: var(--accent); }
 .add #titulo { flex: 1 1 240px; }
 .add #autor { flex: 0 1 180px; }
 .nome-form input { flex: 1 1 160px; }
-.add input, .nome-form input {
+.filtro { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: .875rem; }
+.filtro select { flex: 0 1 240px; min-width: 0; cursor: pointer; }
+.add input, .nome-form input, .filtro select {
   flex: 1; min-width: 0; font: inherit; padding: 9px 12px;
   background: var(--surface); color: var(--ink);
   border: 1px solid var(--line); border-radius: 8px;
@@ -118,6 +120,8 @@ h1 span { color: var(--accent); }
     <p class="sub">Lista compartilhada. Mudanças aparecem para todos na hora.</p>
   </header>
 
+  <label class="filtro">Pessoa <select id="pessoa"></select></label>
+
   <nav class="tabs" aria-label="Etapas">
     <button class="tab" type="button" id="tab-pendente" data-s="pendente" aria-pressed="true"><span class="lbl">Pendências</span><span class="n" id="n-pendente">0</span></button>
     <span class="arrow" aria-hidden="true">›</span>
@@ -165,9 +169,13 @@ const ETAPAS = {
 const sb = supabase.createClient('https://htmyouchcethefvrygpk.supabase.co', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh0bXlvdWNoY2V0aGVmdnJ5Z3BrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQyOTQ2NTQsImV4cCI6MjEwOTg3MDY1NH0.NACTRMN9mB8uCdSH4Gf5zy_oYhxT5CakFA1oDpIHvx8');
 let tab = 'pendente', tasks = [], loaded = false, confirming = null, confirmTimer, editando = null, draft = '';
 // último nome usado neste computador, para pré-preencher os campos
-const NOME = 'controle-producao-nome';
-const lembrado = () => { try { return localStorage.getItem(NOME) || ''; } catch { return ''; } };
-const lembrar = n => { try { localStorage.setItem(NOME, n); } catch {} };
+const NOME = 'controle-producao-nome', FILTRO = 'controle-producao-filtro';
+const lembrado = (k = NOME) => { try { return localStorage.getItem(k) || ''; } catch { return ''; } };
+const lembrar = (n, k = NOME) => { try { localStorage.setItem(k, n); } catch {} };
+let pessoa = lembrado(FILTRO);
+// filtro: tarefas que a pessoa criou ou testa/testou
+const daPessoa = (t, p) => !p || t.autor === p || t.testador === p;
+console.assert(daPessoa({ autor: 'Ana' }, '') && daPessoa({ autor: 'Ana' }, 'Ana') && daPessoa({ autor: 'Ana', testador: 'Bia' }, 'Bia') && !daPessoa({ autor: 'Ana' }, 'Bia'), 'daPessoa()');
 const busy = new Set();
 const $ = s => document.querySelector(s);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
@@ -300,22 +308,32 @@ function row(t, now) {
 
 function render() {
   const now = Date.now();
+  const nomes = [...new Set(tasks.flatMap(t => [t.autor, t.testador]).filter(Boolean))].sort();
+  $('#nomes').replaceChildren(...nomes.map(n => { const o = el('option'); o.value = n; return o; }));
+
+  // só recria as opções quando mudam, para não fechar o seletor aberto
+  const sel = $('#pessoa'), ops = [...new Set([...nomes, pessoa].filter(Boolean))].sort();
+  if (sel.dataset.ops !== ops.join('|')) {
+    sel.dataset.ops = ops.join('|');
+    sel.replaceChildren(el('option', null, 'Todas as pessoas'), ...ops.map(n => el('option', null, n)));
+    sel.options[0].value = '';
+  }
+  sel.value = pessoa;
+  const vis = tasks.filter(t => daPessoa(t, pessoa));
+
   for (const s in ETAPAS) {
-    $('#n-' + s).textContent = loaded ? tasks.filter(t => t.status === s).length : '–';
+    $('#n-' + s).textContent = loaded ? vis.filter(t => t.status === s).length : '–';
     $('#tab-' + s).setAttribute('aria-pressed', s === tab);
   }
   $('#board').dataset.s = tab;
   $('#dica').textContent = ETAPAS[tab].dica;
   $('#add').hidden = !loaded;
 
-  const rows = tasks.filter(t => t.status === tab)
+  const rows = vis.filter(t => t.status === tab)
     .sort((a, b) => tab === 'concluido' ? b.desde - a.desde : a.desde - b.desde);
   $('#list').replaceChildren(...rows.map(t => row(t, now)));
-  $('#vazio').textContent = ETAPAS[tab].vazio;
+  $('#vazio').textContent = pessoa ? 'Nada de ' + pessoa + ' nesta etapa.' : ETAPAS[tab].vazio;
   $('#vazio').hidden = !loaded || rows.length > 0;
-
-  const nomes = [...new Set(tasks.flatMap(t => [t.autor, t.testador]).filter(Boolean))].sort();
-  $('#nomes').replaceChildren(...nomes.map(n => { const o = el('option'); o.value = n; return o; }));
 
   // o re-render recria o campo de nome; devolve o foco se ele se perdeu
   const campo = $('#campo-inline');
@@ -325,12 +343,15 @@ function render() {
 
 document.querySelectorAll('.tab').forEach(b => b.onclick = () => { tab = b.dataset.s; confirming = null; editando = null; render(); });
 $('#autor').value = lembrado();
+$('#pessoa').onchange = e => { pessoa = e.target.value; lembrar(pessoa, FILTRO); confirming = null; editando = null; render(); };
 
 $('#add').onsubmit = async e => {
   e.preventDefault();
   const inp = $('#titulo'), titulo = inp.value.trim(), autor = $('#autor').value.trim();
   if (!titulo || !autor) return;
   lembrar(autor);
+  // a tarefa nova sumiria se o filtro estiver em outra pessoa
+  if (pessoa && pessoa !== autor) { pessoa = ''; lembrar('', FILTRO); }
   const now = Date.now();
   inp.value = ''; tab = 'pendente';
   const { error } = await sb.from('tarefas').insert({ titulo, autor, status: 'pendente', criado: now, desde: now });
