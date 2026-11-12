@@ -120,7 +120,7 @@ h1 span { color: var(--accent); }
     <p class="sub">Lista compartilhada. Mudanças aparecem para todos na hora.</p>
   </header>
 
-  <label class="filtro">Pessoa <select id="pessoa"></select></label>
+  <label class="filtro">Criada por <select id="pessoa"></select></label>
 
   <nav class="tabs" aria-label="Etapas">
     <button class="tab" type="button" id="tab-pendente" data-s="pendente" aria-pressed="true"><span class="lbl">Pendências</span><span class="n" id="n-pendente">0</span></button>
@@ -173,9 +173,9 @@ const NOME = 'controle-producao-nome', FILTRO = 'controle-producao-filtro';
 const lembrado = (k = NOME) => { try { return localStorage.getItem(k) || ''; } catch { return ''; } };
 const lembrar = (n, k = NOME) => { try { localStorage.setItem(k, n); } catch {} };
 let pessoa = lembrado(FILTRO);
-// filtro: tarefas que a pessoa criou ou testa/testou
-const daPessoa = (t, p) => !p || t.autor === p || t.testador === p;
-console.assert(daPessoa({ autor: 'Ana' }, '') && daPessoa({ autor: 'Ana' }, 'Ana') && daPessoa({ autor: 'Ana', testador: 'Bia' }, 'Bia') && !daPessoa({ autor: 'Ana' }, 'Bia'), 'daPessoa()');
+// filtro: só as tarefas que a pessoa criou
+const daPessoa = (t, p) => !p || t.autor === p;
+console.assert(daPessoa({ autor: 'Ana' }, '') && daPessoa({ autor: 'Ana' }, 'Ana') && !daPessoa({ autor: 'Ana', testador: 'Bia' }, 'Bia') && !daPessoa({ autor: null }, 'Bia'), 'daPessoa()');
 const busy = new Set();
 const $ = s => document.querySelector(s);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
@@ -312,10 +312,10 @@ function render() {
   $('#nomes').replaceChildren(...nomes.map(n => { const o = el('option'); o.value = n; return o; }));
 
   // só recria as opções quando mudam, para não fechar o seletor aberto
-  const sel = $('#pessoa'), ops = [...new Set([...nomes, pessoa].filter(Boolean))].sort();
+  const sel = $('#pessoa'), ops = [...new Set([...tasks.map(t => t.autor), pessoa].filter(Boolean))].sort();
   if (sel.dataset.ops !== ops.join('|')) {
     sel.dataset.ops = ops.join('|');
-    sel.replaceChildren(el('option', null, 'Todas as pessoas'), ...ops.map(n => el('option', null, n)));
+    sel.replaceChildren(el('option', null, 'Todos'), ...ops.map(n => el('option', null, n)));
     sel.options[0].value = '';
   }
   sel.value = pessoa;
@@ -332,7 +332,7 @@ function render() {
   const rows = vis.filter(t => t.status === tab)
     .sort((a, b) => tab === 'concluido' ? b.desde - a.desde : a.desde - b.desde);
   $('#list').replaceChildren(...rows.map(t => row(t, now)));
-  $('#vazio').textContent = pessoa ? 'Nada de ' + pessoa + ' nesta etapa.' : ETAPAS[tab].vazio;
+  $('#vazio').textContent = pessoa ? 'Nada criado por ' + pessoa + ' nesta etapa.' : ETAPAS[tab].vazio;
   $('#vazio').hidden = !loaded || rows.length > 0;
 
   // o re-render recria o campo de nome; devolve o foco se ele se perdeu
