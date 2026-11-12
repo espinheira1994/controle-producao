@@ -163,7 +163,7 @@ const ETAPAS = {
 };
 // chave pública (anon): o acesso é livre com o link, escolha do usuário
 const sb = supabase.createClient('https://htmyouchcethefvrygpk.supabase.co', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh0bXlvdWNoY2V0aGVmdnJ5Z3BrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQyOTQ2NTQsImV4cCI6MjEwOTg3MDY1NH0.NACTRMN9mB8uCdSH4Gf5zy_oYhxT5CakFA1oDpIHvx8');
-let tab = 'pendente', tasks = [], loaded = false, confirming = null, confirmTimer, naming = null, nomeDraft = '';
+let tab = 'pendente', tasks = [], loaded = false, confirming = null, confirmTimer, editando = null, draft = '';
 // último nome usado neste computador, para pré-preencher os campos
 const NOME = 'controle-producao-nome';
 const lembrado = () => { try { return localStorage.getItem(NOME) || ''; } catch { return ''; } };
@@ -223,26 +223,37 @@ async function write(id, fn) {
 
 const mover = (id, status, extra) => write(id, () => sb.from('tarefas').update({ status, desde: Date.now(), ...extra }).eq('id', id));
 const excluir = id => write(id, () => sb.from('tarefas').delete().eq('id', id));
-const nomear = id => { naming = id; nomeDraft = lembrado(); confirming = null; render(); };
+const CAMPOS = {
+  testador: { label: 'Quem vai testar', max: 40, nomes: true },
+  titulo: { label: 'Título da tarefa', max: 200 },
+};
+const abrir = (t, campo) => {
+  editando = { id: t.id, campo };
+  draft = campo === 'titulo' ? t.titulo : lembrado();
+  confirming = null; render();
+};
 
-// campo inline de "Assumir teste" / "Trocar testador"
-function nomeForm(t) {
+// campo inline de "Editar", "Assumir teste" e "Trocar testador"
+function campoForm(t) {
+  const { campo } = editando, c = CAMPOS[campo];
   const f = el('form', 'nome-form');
   f.autocomplete = 'off';
   const inp = el('input');
-  inp.id = 'nome-teste'; inp.maxLength = 40; inp.required = true; inp.pattern = '.*\\S.*';
-  inp.placeholder = 'Quem vai testar'; inp.setAttribute('aria-label', 'Quem vai testar'); inp.setAttribute('list', 'nomes');
-  inp.value = nomeDraft;
-  inp.oninput = () => { nomeDraft = inp.value; };
-  const ok = el('button', 'btn primary', 'Confirmar'); ok.type = 'submit';
+  inp.id = 'campo-inline'; inp.maxLength = c.max; inp.required = true; inp.pattern = '.*\\S.*';
+  inp.placeholder = c.label; inp.setAttribute('aria-label', c.label);
+  if (c.nomes) inp.setAttribute('list', 'nomes');
+  inp.value = draft;
+  inp.oninput = () => { draft = inp.value; };
+  const ok = el('button', 'btn primary', campo === 'titulo' ? 'Salvar' : 'Confirmar'); ok.type = 'submit';
   const no = el('button', 'btn', 'Cancelar'); no.type = 'button';
-  no.onclick = () => { naming = null; render(); };
+  no.onclick = () => { editando = null; render(); };
   f.onkeydown = e => { if (e.key === 'Escape') no.click(); };
   f.onsubmit = e => {
     e.preventDefault();
-    const nome = inp.value.trim();
-    lembrar(nome); naming = null;
-    write(t.id, () => sb.from('tarefas').update({ testador: nome }).eq('id', t.id));
+    const valor = inp.value.trim();
+    if (campo === 'testador') lembrar(valor);
+    editando = null;
+    write(t.id, () => sb.from('tarefas').update({ [campo]: valor }).eq('id', t.id));
   };
   f.append(inp, ok, no);
   return f;
@@ -255,7 +266,7 @@ function row(t, now) {
   if (t.status === 'teste' && !t.testador) txt.append(el('div', 'espera', 'Aguardando testador'));
   txt.append(el('div', 'meta', meta(t, now)));
   li.append(txt);
-  if (naming === t.id) { li.append(nomeForm(t)); return li; }
+  if (editando?.id === t.id) { li.append(campoForm(t)); return li; }
 
   const acts = el('div', 'acts');
   const btn = (label, cls, onclick) => {
@@ -264,13 +275,14 @@ function row(t, now) {
     acts.append(b); return b;
   };
   if (t.status === 'pendente') btn('Enviar para teste', 'primary', () => mover(t.id, 'teste', { testador: null }));
-  if (t.status === 'teste' && !t.testador) btn('Assumir teste', 'primary', () => nomear(t.id));
+  if (t.status === 'teste' && !t.testador) btn('Assumir teste', 'primary', () => abrir(t, 'testador'));
   if (t.status === 'teste' && t.testador) {
     btn('Aprovar', 'ok', () => mover(t.id, 'concluido'));
     btn('Reprovar', '', () => mover(t.id, 'pendente')); // mantém o testador para mostrar "reprovada por"
-    btn('Trocar testador', '', () => nomear(t.id));
+    btn('Trocar testador', '', () => abrir(t, 'testador'));
   }
   if (t.status === 'concluido') btn('Reabrir', '', () => mover(t.id, 'pendente', { testador: null }));
+  btn('Editar', '', () => abrir(t, 'titulo'));
 
   const armed = confirming === t.id;
   const del = btn(armed ? 'Confirmar exclusão' : 'Excluir', 'del' + (armed ? ' armed' : ''), () => {
@@ -306,12 +318,12 @@ function render() {
   $('#nomes').replaceChildren(...nomes.map(n => { const o = el('option'); o.value = n; return o; }));
 
   // o re-render recria o campo de nome; devolve o foco se ele se perdeu
-  const campo = $('#nome-teste');
-  if (naming && !campo) naming = null;
+  const campo = $('#campo-inline');
+  if (editando && !campo) editando = null;
   else if (campo && document.activeElement === document.body) campo.focus();
 }
 
-document.querySelectorAll('.tab').forEach(b => b.onclick = () => { tab = b.dataset.s; confirming = null; naming = null; render(); });
+document.querySelectorAll('.tab').forEach(b => b.onclick = () => { tab = b.dataset.s; confirming = null; editando = null; render(); });
 $('#autor').value = lembrado();
 
 $('#add').onsubmit = async e => {
