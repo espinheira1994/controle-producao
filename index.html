@@ -1,0 +1,282 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Controle de Produção</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Mono:wght@500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: uma coluna estreita — título, etapas em sequência (Pendências › Teste › Concluído), campo de nova tarefa, painel com as tarefas da etapa */
+:root {
+  /* tema único vermelho e preto, pedido do usuário */
+  --bg: #0b0909; --surface: #151212; --ink: #f4f1f1; --muted: #a39a9a; --line: #2e2626;
+  --accent: #e3141b; --accent-ink: #ffffff;
+  --pend: #ff4d4d; --pend-bg: #2a0d0d;
+  --test: #ffb020; --test-bg: #2b1f08;
+  --done: #4cc38a; --done-bg: #0e2419;
+  --danger: #ff6b6b;
+  /* sem internet as fontes do Google não carregam e entram as de reserva */
+  --f-display: "Barlow Condensed", "Arial Narrow", system-ui, sans-serif;
+  --f-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+  color-scheme: dark;
+}
+[hidden] { display: none !important; }
+
+body {
+  margin: 0;
+  background: var(--bg); color: var(--ink);
+  font: 15px/1.5 var(--f-body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 28px 48px;
+  border-top: 4px solid var(--accent);
+}
+.app { max-width: 760px; margin: 0 auto; display: grid; gap: 16px; }
+header { display: grid; gap: 4px; }
+h1 { margin: 0; font: 700 2.25rem/1 var(--f-display); text-transform: uppercase; letter-spacing: .01em; text-wrap: balance; }
+h1 span { color: var(--accent); }
+.sub { margin: 0; color: var(--muted); font-size: .875rem; }
+
+[data-s="pendente"] { --c: var(--pend); --cbg: var(--pend-bg); }
+[data-s="teste"] { --c: var(--test); --cbg: var(--test-bg); }
+[data-s="concluido"] { --c: var(--done); --cbg: var(--done-bg); }
+
+.tabs { display: grid; grid-template-columns: 1fr auto 1fr auto 1fr; gap: 6px; }
+.arrow { align-self: center; color: var(--muted); font-size: 1.25rem; }
+.tab {
+  appearance: none; font: inherit; text-align: left; cursor: pointer; min-width: 0;
+  display: grid; gap: 2px; padding: 10px 12px;
+  background: var(--surface); color: var(--muted);
+  border: 1px solid var(--line); border-radius: 10px;
+}
+.tab:hover { border-color: var(--c); }
+.tab .lbl { font: 600 1rem/1.1 var(--f-display); text-transform: uppercase; letter-spacing: .05em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tab .n { font: 700 2rem/1 var(--f-display); color: var(--ink); font-variant-numeric: tabular-nums; }
+.tab[aria-pressed="true"] { background: var(--cbg); border-color: var(--c); }
+.tab[aria-pressed="true"] .lbl, .tab[aria-pressed="true"] .n { color: var(--c); }
+@media (max-width: 440px) {
+  .tabs { grid-template-columns: repeat(3, 1fr); }
+  .arrow { display: none; }
+}
+
+.add { display: flex; gap: 8px; }
+.add input {
+  flex: 1; min-width: 0; font: inherit; padding: 9px 12px;
+  background: var(--surface); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 8px;
+}
+.add input::placeholder { color: var(--muted); }
+
+.btn {
+  font: 600 .875rem/1 var(--f-body); min-height: 40px; padding: 0 14px; cursor: pointer; white-space: nowrap;
+  background: var(--surface); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 8px;
+}
+.btn:hover { border-color: var(--muted); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.btn.ok { background: var(--done-bg); border-color: var(--done); color: var(--done); }
+.btn.del { background: transparent; border-color: transparent; color: var(--muted); }
+.btn.del:hover, .btn.del.armed { color: var(--danger); border-color: var(--danger); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.msg {
+  margin: 0; padding: 10px 12px; font-size: .875rem; color: var(--danger);
+  background: var(--surface); border: 1px solid var(--line); border-radius: 8px;
+}
+
+.board { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.dica { margin: 0; padding: 10px 16px; font-size: .875rem; color: var(--c); background: var(--cbg); border-bottom: 1px solid var(--line); }
+.list { list-style: none; margin: 0; padding: 0; }
+.item { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 12px 16px; border-top: 1px solid var(--line); }
+.item:first-child { border-top: 0; }
+.txt { flex: 1 1 240px; min-width: 0; display: grid; gap: 2px; }
+.ttl { font-weight: 500; overflow-wrap: anywhere; }
+.meta { font: 500 .75rem/1.4 var(--f-mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+.acts { display: flex; flex-wrap: wrap; gap: 6px; }
+.vazio { margin: 0; padding: 28px 16px; color: var(--muted); text-align: center; }
+
+.backup { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 16px; padding: 12px 16px; border: 1px dashed var(--line); border-radius: 12px; }
+.backup-txt { flex: 1 1 260px; min-width: 0; display: grid; gap: 2px; font-size: .875rem; color: var(--muted); }
+.backup-txt strong { color: var(--ink); font: 600 1rem/1.1 var(--f-display); text-transform: uppercase; letter-spacing: .05em; }
+.btn:disabled { opacity: .5; cursor: progress; }
+.msg { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; color: var(--muted); }
+
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+</style>
+</head>
+<body>
+<main class="app">
+  <header>
+    <h1>Controle de <span>Produção</span></h1>
+    <p class="sub">Lista compartilhada. Mudanças aparecem para todos na hora.</p>
+  </header>
+
+  <nav class="tabs" aria-label="Etapas">
+    <button class="tab" type="button" id="tab-pendente" data-s="pendente" aria-pressed="true"><span class="lbl">Pendências</span><span class="n" id="n-pendente">0</span></button>
+    <span class="arrow" aria-hidden="true">›</span>
+    <button class="tab" type="button" id="tab-teste" data-s="teste" aria-pressed="false"><span class="lbl">Teste</span><span class="n" id="n-teste">0</span></button>
+    <span class="arrow" aria-hidden="true">›</span>
+    <button class="tab" type="button" id="tab-concluido" data-s="concluido" aria-pressed="false"><span class="lbl">Concluído</span><span class="n" id="n-concluido">0</span></button>
+  </nav>
+
+  <form id="add" class="add" autocomplete="off" hidden>
+    <label class="sr" for="titulo">Nova pendência</label>
+    <input id="titulo" name="titulo" maxlength="200" placeholder="Nova pendência…" required>
+    <button class="btn primary" type="submit">Adicionar</button>
+  </form>
+
+  <p id="msg" class="msg" role="status" aria-live="polite">Carregando tarefas…</p>
+
+  <section class="board" id="board" data-s="pendente">
+    <p class="dica" id="dica"></p>
+    <ul class="list" id="list"></ul>
+    <p class="vazio" id="vazio" hidden></p>
+  </section>
+
+  <section class="backup" aria-label="Backup">
+    <div class="backup-txt">
+      <strong>Backup</strong>
+      <span>Baixe uma cópia da lista para guardar.</span>
+    </div>
+    <div class="acts">
+      <button class="btn" type="button" id="exportar">Exportar backup</button>
+    </div>
+  </section>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script>
+const ETAPAS = {
+  pendente: { dica: 'A fazer. Quando terminar, envie para teste.', vazio: 'Nenhuma pendência. Adicione a primeira tarefa no campo acima.' },
+  teste: { dica: 'Em verificação. Aprove para concluir ou reprove para voltar às pendências.', vazio: 'Nada em teste. Envie uma pendência para teste quando ela estiver pronta.' },
+  concluido: { dica: 'Tarefas aprovadas no teste.', vazio: 'Nada concluído ainda. Tarefas aprovadas no teste aparecem aqui.' },
+};
+// chave pública (anon): o acesso é livre com o link, escolha do usuário
+const sb = supabase.createClient('https://htmyouchcethefvrygpk.supabase.co', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh0bXlvdWNoY2V0aGVmdnJ5Z3BrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQyOTQ2NTQsImV4cCI6MjEwOTg3MDY1NH0.NACTRMN9mB8uCdSH4Gf5zy_oYhxT5CakFA1oDpIHvx8');
+let tab = 'pendente', tasks = [], loaded = false, confirming = null, confirmTimer;
+const busy = new Set();
+const $ = s => document.querySelector(s);
+const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+
+function dur(ms) {
+  const m = Math.floor(ms / 60000), h = Math.floor(m / 60), d = Math.floor(h / 24);
+  if (m < 1) return 'menos de 1 min';
+  if (h < 1) return m + ' min';
+  if (d < 1) return h + ' h';
+  return d + ' d' + (h % 24 ? ' ' + (h % 24) + ' h' : '');
+}
+console.assert(dur(0) === 'menos de 1 min' && dur(5 * 60000) === '5 min' && dur(90 * 60000) === '1 h' && dur(26 * 3600000) === '1 d 2 h', 'dur()');
+const data = ts => new Date(ts).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+
+function meta(t, now) {
+  if (t.status === 'concluido') return 'concluída ' + data(t.desde) + ' · ciclo de ' + dur(t.desde - t.criado);
+  return 'há ' + dur(now - t.desde) + ' nesta etapa · criada ' + data(t.criado);
+}
+
+function say(text, retry) {
+  const m = $('#msg');
+  m.replaceChildren(text);
+  if (retry) { const b = el('button', 'btn', 'Tentar de novo'); b.type = 'button'; b.onclick = retry; m.append(b); }
+  m.hidden = !text;
+}
+
+async function carregar() {
+  const { data: rows, error } = await sb.from('tarefas').select('id,titulo,status,criado,desde');
+  if (error) { say(loaded ? 'Sem conexão: a lista pode estar desatualizada.' : 'Não foi possível carregar a lista. Verifique a internet.', carregar); return; }
+  tasks = rows; loaded = true; say(''); render();
+}
+
+// grava e recarrega; o realtime avisa os outros computadores
+async function write(id, fn) {
+  busy.add(id); render();
+  const { error } = await fn();
+  busy.delete(id);
+  if (error) say('Não foi possível salvar. Verifique a internet e tente de novo.');
+  await carregar();
+}
+
+const mover = (id, status) => write(id, () => sb.from('tarefas').update({ status, desde: Date.now() }).eq('id', id));
+const excluir = id => write(id, () => sb.from('tarefas').delete().eq('id', id));
+
+function row(t, now) {
+  const li = el('li', 'item');
+  const txt = el('div', 'txt');
+  txt.append(el('div', 'ttl', t.titulo), el('div', 'meta', meta(t, now)));
+  li.append(txt);
+
+  const acts = el('div', 'acts');
+  const btn = (label, cls, onclick) => {
+    const b = el('button', 'btn ' + cls, label);
+    b.type = 'button'; b.disabled = busy.has(t.id); b.onclick = onclick;
+    acts.append(b); return b;
+  };
+  if (t.status === 'pendente') btn('Enviar para teste', 'primary', () => mover(t.id, 'teste'));
+  if (t.status === 'teste') { btn('Aprovar', 'ok', () => mover(t.id, 'concluido')); btn('Reprovar', '', () => mover(t.id, 'pendente')); }
+  if (t.status === 'concluido') btn('Reabrir', '', () => mover(t.id, 'pendente'));
+
+  const armed = confirming === t.id;
+  const del = btn(armed ? 'Confirmar exclusão' : 'Excluir', 'del' + (armed ? ' armed' : ''), () => {
+    clearTimeout(confirmTimer);
+    if (confirming === t.id) { confirming = null; excluir(t.id); return; }
+    confirming = t.id;
+    confirmTimer = setTimeout(() => { confirming = null; render(); }, 4000);
+    render();
+    $('#list').querySelector('[data-del="' + CSS.escape(t.id) + '"]')?.focus();
+  });
+  del.dataset.del = t.id;
+  li.append(acts);
+  return li;
+}
+
+function render() {
+  const now = Date.now();
+  for (const s in ETAPAS) {
+    $('#n-' + s).textContent = loaded ? tasks.filter(t => t.status === s).length : '–';
+    $('#tab-' + s).setAttribute('aria-pressed', s === tab);
+  }
+  $('#board').dataset.s = tab;
+  $('#dica').textContent = ETAPAS[tab].dica;
+  $('#add').hidden = !loaded;
+
+  const rows = tasks.filter(t => t.status === tab)
+    .sort((a, b) => tab === 'concluido' ? b.desde - a.desde : a.desde - b.desde);
+  $('#list').replaceChildren(...rows.map(t => row(t, now)));
+  $('#vazio').textContent = ETAPAS[tab].vazio;
+  $('#vazio').hidden = !loaded || rows.length > 0;
+}
+
+document.querySelectorAll('.tab').forEach(b => b.onclick = () => { tab = b.dataset.s; confirming = null; render(); });
+
+$('#add').onsubmit = async e => {
+  e.preventDefault();
+  const inp = $('#titulo'), titulo = inp.value.trim();
+  if (!titulo) return;
+  const now = Date.now();
+  inp.value = ''; tab = 'pendente';
+  const { error } = await sb.from('tarefas').insert({ titulo, status: 'pendente', criado: now, desde: now });
+  if (error) { inp.value = titulo; say('Não foi possível salvar. Verifique a internet e tente de novo.'); }
+  await carregar();
+};
+
+$('#exportar').onclick = () => {
+  const json = JSON.stringify({ app: 'controle-producao', versao: 1, exportado: new Date().toISOString(), tarefas: tasks }, null, 2);
+  const a = el('a');
+  a.href = URL.createObjectURL(new Blob([json], { type: 'application/json' }));
+  a.download = 'controle-producao-backup-' + new Date().toLocaleDateString('sv') + '.json';
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+};
+
+sb.channel('tarefas').on('postgres_changes', { event: '*', schema: 'public', table: 'tarefas' }, carregar).subscribe();
+// rede de segurança caso o realtime caia
+addEventListener('focus', carregar);
+setInterval(() => { if (!$('#list').contains(document.activeElement)) render(); }, 60000);
+setInterval(carregar, 120000);
+render();
+carregar();
+</script>
+</body>
+</html>
