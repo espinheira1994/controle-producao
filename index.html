@@ -66,15 +66,17 @@ h1 span { color: var(--accent); }
 .add #titulo { flex: 1 1 240px; }
 .add #autor { flex: 0 1 180px; }
 .nome-form input { flex: 1 1 160px; }
-.filtro { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: .875rem; }
-.filtro select { flex: 0 1 240px; min-width: 0; cursor: pointer; }
-.add input, .nome-form input, .filtro select {
+.barra { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
+.busca { flex: 1 1 260px; display: flex; }
+.filtro { flex: 0 1 320px; display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: .875rem; }
+.filtro select { min-width: 0; cursor: pointer; }
+.add input, .nome-form input, .filtro select, .busca input {
   flex: 1; min-width: 0; font: inherit; padding: 9px 12px;
   background: var(--surface); color: var(--ink);
   border: 1px solid var(--line); border-radius: 8px;
 }
 .nome-form input { background: var(--bg); }
-.add input::placeholder, .nome-form input::placeholder { color: var(--muted); }
+.add input::placeholder, .nome-form input::placeholder, .busca input::placeholder { color: var(--muted); }
 .espera { font-size: .875rem; font-weight: 600; color: var(--test); }
 
 .btn {
@@ -141,7 +143,10 @@ h1 span { color: var(--accent); }
     <p class="sub">Quadro compartilhado. Mudanças aparecem para todos na hora. Arraste os cartões entre as colunas ou use os botões.</p>
   </header>
 
-  <label class="filtro">Criada por <select id="pessoa"></select></label>
+  <div class="barra">
+    <label class="busca"><span class="sr">Pesquisar</span><input id="busca" type="search" placeholder="Pesquisar por título ou nome…" autocomplete="off"></label>
+    <label class="filtro">Criada por <select id="pessoa"></select></label>
+  </div>
 
   <form id="add" class="add" autocomplete="off" hidden>
     <label class="sr" for="titulo">Nova pendência</label>
@@ -193,6 +198,12 @@ let pessoa = lembrado(FILTRO);
 // filtro: só as tarefas que a pessoa criou
 const daPessoa = (t, p) => !p || t.autor === p;
 console.assert(daPessoa({ autor: 'Ana' }, '') && daPessoa({ autor: 'Ana' }, 'Ana') && !daPessoa({ autor: 'Ana', testador: 'Bia' }, 'Bia') && !daPessoa({ autor: null }, 'Bia'), 'daPessoa()');
+// pesquisa: sem diferença de maiúsculas e acentos; todas as palavras precisam aparecer no título, criador ou responsável
+const norm = s => (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+let busca = [];
+const achou = (t, palavras) => { const txt = norm([t.titulo, t.autor, t.testador].join(' ')); return palavras.every(p => txt.includes(p)); };
+console.assert(achou({ titulo: 'Pátio de carros' }, ['patio', 'carros']) && achou({ titulo: 'Sistema de trade' }, ['sistema', 'trade'])
+  && achou({ titulo: 'x', autor: 'ESPINHEIRA' }, ['espinheira']) && achou({ titulo: 'x' }, []) && !achou({ titulo: 'Pátio' }, ['hospital']), 'achou()');
 const busy = new Set();
 const $ = s => document.querySelector(s);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
@@ -430,7 +441,7 @@ function render() {
     sel.options[0].value = '';
   }
   sel.value = pessoa;
-  const vis = tasks.filter(t => daPessoa(t, pessoa));
+  const vis = tasks.filter(t => daPessoa(t, pessoa) && achou(t, busca));
   $('#add').hidden = !loaded;
 
   for (const s in ETAPAS) {
@@ -441,7 +452,7 @@ function render() {
     $('#tab-' + s).setAttribute('aria-pressed', s === tab);
     c.col.classList.toggle('ativa', s === tab);
     c.list.replaceChildren(...rows.map(t => card(t, now)));
-    c.vazio.textContent = pessoa ? 'Nada criado por ' + pessoa + '.' : ETAPAS[s].vazio;
+    c.vazio.textContent = busca.length ? 'Nada encontrado.' : pessoa ? 'Nada criado por ' + pessoa + '.' : ETAPAS[s].vazio;
     c.vazio.hidden = !loaded || rows.length > 0;
   }
 
@@ -453,6 +464,7 @@ function render() {
 
 document.querySelectorAll('.tab').forEach(b => b.onclick = () => { tab = b.dataset.s; confirming = null; editando = null; menu = null; render(); });
 $('#autor').value = lembrado();
+$('#busca').oninput = e => { busca = norm(e.target.value).split(/\s+/).filter(Boolean); confirming = null; menu = null; render(); };
 $('#pessoa').onchange = e => { pessoa = e.target.value; lembrar(pessoa, FILTRO); confirming = null; editando = null; menu = null; render(); };
 
 $('#add').onsubmit = async e => {
