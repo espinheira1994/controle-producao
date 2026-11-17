@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Mono:wght@500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
 <style>
-/* Layout: uma coluna estreita — título, etapas em sequência (Pendências › Em andamento › Concluído), campo de nova tarefa, painel com as tarefas da etapa */
+/* Layout: quadro estilo Trello — três colunas lado a lado (Pendências › Em andamento › Concluído); abaixo de 720 px vira abas com uma coluna por vez */
 :root {
   /* tema único vermelho e preto, pedido do usuário */
   --bg: #0b0909; --surface: #151212; --ink: #f4f1f1; --muted: #a39a9a; --line: #2e2626;
@@ -34,7 +34,7 @@ body {
   padding-block: 28px 48px;
   border-top: 4px solid var(--accent);
 }
-.app { max-width: 760px; margin: 0 auto; display: grid; gap: 16px; }
+.app { max-width: 1400px; margin: 0 auto; display: grid; gap: 16px; }
 header { display: grid; gap: 4px; }
 h1 { margin: 0; font: 700 2.25rem/1 var(--f-display); text-transform: uppercase; letter-spacing: .01em; text-wrap: balance; }
 h1 span { color: var(--accent); }
@@ -53,7 +53,7 @@ h1 span { color: var(--accent); }
   border: 1px solid var(--line); border-radius: 10px;
 }
 .tab:hover { border-color: var(--c); }
-.tab .lbl { font: 600 1rem/1.1 var(--f-display); text-transform: uppercase; letter-spacing: .05em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tab .lbl { font: 600 1rem/1.1 var(--f-display); text-transform: uppercase; letter-spacing: .05em; }
 .tab .n { font: 700 2rem/1 var(--f-display); color: var(--ink); font-variant-numeric: tabular-nums; }
 .tab[aria-pressed="true"] { background: var(--cbg); border-color: var(--c); }
 .tab[aria-pressed="true"] .lbl, .tab[aria-pressed="true"] .n { color: var(--c); }
@@ -73,6 +73,7 @@ h1 span { color: var(--accent); }
   background: var(--surface); color: var(--ink);
   border: 1px solid var(--line); border-radius: 8px;
 }
+.nome-form input { background: var(--bg); }
 .add input::placeholder, .nome-form input::placeholder { color: var(--muted); }
 .espera { font-size: .875rem; font-weight: 600; color: var(--test); }
 
@@ -86,29 +87,49 @@ h1 span { color: var(--accent); }
 .btn.ok { background: var(--done-bg); border-color: var(--done); color: var(--done); }
 .btn.del { background: transparent; border-color: transparent; color: var(--muted); }
 .btn.del:hover, .btn.del.armed { color: var(--danger); border-color: var(--danger); }
+.btn.mais-btn { margin-left: auto; padding: 0 12px; font-size: .625rem; letter-spacing: .2em; }
+.btn.mais-btn[aria-expanded="true"] { border-color: var(--muted); }
+.btn:disabled { opacity: .5; cursor: progress; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 .msg {
-  margin: 0; padding: 10px 12px; font-size: .875rem; color: var(--danger);
+  margin: 0; padding: 10px 12px; font-size: .875rem; color: var(--muted);
   background: var(--surface); border: 1px solid var(--line); border-radius: 8px;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px;
 }
 
-.board { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
-.dica { margin: 0; padding: 10px 16px; font-size: .875rem; color: var(--c); background: var(--cbg); border-bottom: 1px solid var(--line); }
-.list { list-style: none; margin: 0; padding: 0; }
-.item { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 12px 16px; border-top: 1px solid var(--line); }
-.item:first-child { border-top: 0; }
-.txt { flex: 1 1 240px; min-width: 0; display: grid; gap: 2px; }
+.quadro { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; align-items: start; }
+.col {
+  display: grid; align-content: start; min-height: 240px;
+  background: var(--surface); border: 1px solid var(--line); border-top: 3px solid var(--c); border-radius: 12px;
+}
+.col.alvo { background: var(--cbg); outline: 2px dashed var(--c); outline-offset: -4px; }
+.col.proibido { outline: 2px dashed var(--muted); outline-offset: -4px; }
+.col-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 12px 14px 2px; }
+.col-head h2 { margin: 0; font: 600 1.125rem/1.1 var(--f-display); text-transform: uppercase; letter-spacing: .05em; color: var(--c); }
+.col-head .n { font: 700 1.75rem/1 var(--f-display); font-variant-numeric: tabular-nums; }
+.dica { margin: 0; padding: 4px 14px 10px; font-size: .8125rem; color: var(--muted); border-bottom: 1px solid var(--line); }
+.list { list-style: none; margin: 0; padding: 10px; display: grid; gap: 8px; }
+.list:empty { display: none; }
+.card { display: grid; gap: 10px; padding: 10px 12px; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; }
+.card[draggable="true"] { cursor: grab; }
+.card.arrastando { opacity: .4; }
+.txt { min-width: 0; display: grid; gap: 2px; }
 .ttl { font-weight: 500; overflow-wrap: anywhere; }
 .meta { font: 500 .75rem/1.4 var(--f-mono); color: var(--muted); font-variant-numeric: tabular-nums; }
-.acts { display: flex; flex-wrap: wrap; gap: 6px; }
-.vazio { margin: 0; padding: 28px 16px; color: var(--muted); text-align: center; }
+.acts, .mais { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.mais { padding-top: 10px; border-top: 1px solid var(--line); }
+.vazio { margin: 0; padding: 24px 14px; color: var(--muted); text-align: center; font-size: .875rem; }
+
+@media (min-width: 720px) { .tabs { display: none; } }
+@media (max-width: 719px) {
+  .quadro { grid-template-columns: 1fr; }
+  .col:not(.ativa), .col-head { display: none; }
+}
 
 .backup { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 16px; padding: 12px 16px; border: 1px dashed var(--line); border-radius: 12px; }
 .backup-txt { flex: 1 1 260px; min-width: 0; display: grid; gap: 2px; font-size: .875rem; color: var(--muted); }
 .backup-txt strong { color: var(--ink); font: 600 1rem/1.1 var(--f-display); text-transform: uppercase; letter-spacing: .05em; }
-.btn:disabled { opacity: .5; cursor: progress; }
-.msg { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; color: var(--muted); }
 
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 </style>
@@ -117,18 +138,10 @@ h1 span { color: var(--accent); }
 <main class="app">
   <header>
     <h1>Controle de <span>Produção</span></h1>
-    <p class="sub">Lista compartilhada. Mudanças aparecem para todos na hora.</p>
+    <p class="sub">Quadro compartilhado. Mudanças aparecem para todos na hora. Arraste os cartões entre as colunas ou use os botões.</p>
   </header>
 
   <label class="filtro">Criada por <select id="pessoa"></select></label>
-
-  <nav class="tabs" aria-label="Etapas">
-    <button class="tab" type="button" id="tab-pendente" data-s="pendente" aria-pressed="true"><span class="lbl">Pendências</span><span class="n" id="n-pendente">0</span></button>
-    <span class="arrow" aria-hidden="true">›</span>
-    <button class="tab" type="button" id="tab-teste" data-s="teste" aria-pressed="false"><span class="lbl">Em andamento</span><span class="n" id="n-teste">0</span></button>
-    <span class="arrow" aria-hidden="true">›</span>
-    <button class="tab" type="button" id="tab-concluido" data-s="concluido" aria-pressed="false"><span class="lbl">Concluído</span><span class="n" id="n-concluido">0</span></button>
-  </nav>
 
   <form id="add" class="add" autocomplete="off" hidden>
     <label class="sr" for="titulo">Nova pendência</label>
@@ -141,16 +154,20 @@ h1 span { color: var(--accent); }
 
   <p id="msg" class="msg" role="status" aria-live="polite">Carregando tarefas…</p>
 
-  <section class="board" id="board" data-s="pendente">
-    <p class="dica" id="dica"></p>
-    <ul class="list" id="list"></ul>
-    <p class="vazio" id="vazio" hidden></p>
-  </section>
+  <nav class="tabs" aria-label="Etapas">
+    <button class="tab" type="button" id="tab-pendente" data-s="pendente" aria-pressed="true"><span class="lbl">Pendências</span><span class="n" id="n-pendente">0</span></button>
+    <span class="arrow" aria-hidden="true">›</span>
+    <button class="tab" type="button" id="tab-teste" data-s="teste" aria-pressed="false"><span class="lbl">Em andamento</span><span class="n" id="n-teste">0</span></button>
+    <span class="arrow" aria-hidden="true">›</span>
+    <button class="tab" type="button" id="tab-concluido" data-s="concluido" aria-pressed="false"><span class="lbl">Concluído</span><span class="n" id="n-concluido">0</span></button>
+  </nav>
+
+  <div class="quadro" id="quadro"></div>
 
   <section class="backup" aria-label="Backup">
     <div class="backup-txt">
       <strong>Backup</strong>
-      <span>Baixe uma cópia da lista para guardar.</span>
+      <span>Baixe uma cópia do quadro para guardar.</span>
     </div>
     <div class="acts">
       <button class="btn" type="button" id="exportar">Exportar backup</button>
@@ -161,13 +178,13 @@ h1 span { color: var(--accent); }
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <script>
 const ETAPAS = {
-  pendente: { dica: 'A fazer. Quando começar, coloque em andamento.', vazio: 'Nenhuma pendência. Adicione a primeira tarefa no campo acima.' },
-  teste: { dica: 'Sendo feitas. Conclua quando terminar ou devolva para as pendências.', vazio: 'Nada em andamento. Coloque uma pendência em andamento quando começar.' },
-  concluido: { dica: 'Tarefas concluídas.', vazio: 'Nada concluído ainda. Tarefas finalizadas aparecem aqui.' },
+  pendente: { nome: 'Pendências', dica: 'A fazer. Quando começar, coloque em andamento.', vazio: 'Nenhuma pendência. Adicione a primeira tarefa no campo acima.' },
+  teste: { nome: 'Em andamento', dica: 'Sendo feitas. Conclua quando terminar ou devolva para as pendências.', vazio: 'Nada em andamento.' },
+  concluido: { nome: 'Concluído', dica: 'Tarefas concluídas.', vazio: 'Nada concluído ainda.' },
 };
 // chave pública (anon): o acesso é livre com o link, escolha do usuário
 const sb = supabase.createClient('https://htmyouchcethefvrygpk.supabase.co', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh0bXlvdWNoY2V0aGVmdnJ5Z3BrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQyOTQ2NTQsImV4cCI6MjEwOTg3MDY1NH0.NACTRMN9mB8uCdSH4Gf5zy_oYhxT5CakFA1oDpIHvx8');
-let tab = 'pendente', tasks = [], loaded = false, confirming = null, confirmTimer, editando = null, draft = '';
+let tab = 'pendente', tasks = [], loaded = false, confirming = null, confirmTimer, editando = null, draft = {}, menu = null, arrastando = null, avisoTimer;
 // último nome usado neste computador, para pré-preencher os campos
 const NOME = 'controle-producao-nome', FILTRO = 'controle-producao-filtro';
 const lembrado = (k = NOME) => { try { return localStorage.getItem(k) || ''; } catch { return ''; } };
@@ -214,24 +231,67 @@ function say(text, retry) {
   if (retry) { const b = el('button', 'btn', 'Tentar de novo'); b.type = 'button'; b.onclick = retry; m.append(b); }
   m.hidden = !text;
 }
+// aviso que some sozinho depois de alguns segundos
+const aviso = text => {
+  say(text); clearTimeout(avisoTimer);
+  avisoTimer = setTimeout(() => { avisoTimer = null; if ($('#msg').textContent === text) say(''); }, 6000);
+};
 
 async function carregar() {
   const { data: rows, error } = await sb.from('tarefas').select('id,titulo,status,criado,desde,autor,testador');
-  if (error) { say(loaded ? 'Sem conexão: a lista pode estar desatualizada.' : 'Não foi possível carregar a lista. Verifique a internet.', carregar); return; }
-  tasks = rows; loaded = true; say(''); render();
+  if (error) { say(loaded ? 'Sem conexão: o quadro pode estar desatualizado.' : 'Não foi possível carregar o quadro. Verifique a internet.', carregar); return; }
+  tasks = rows; loaded = true;
+  if (!avisoTimer) say('');
+  render();
 }
 
-// grava e recarrega; o realtime avisa os outros computadores
+// grava e recarrega; o realtime avisa os outros computadores.
+// as gravações pedem a linha de volta: nenhuma linha = outra pessoa mexeu no cartão antes
 async function write(id, fn) {
-  busy.add(id); render();
-  const { error } = await fn();
+  busy.add(id); menu = null; render();
+  const { data: rows, error } = await fn();
   busy.delete(id);
-  if (error) say('Não foi possível salvar. Verifique a internet e tente de novo.');
+  const conflito = !error && Array.isArray(rows) && rows.length === 0;
+  if ((error || conflito) && editando?.id === id) editando = null;
   await carregar();
+  if (error) aviso('Não foi possível salvar. Verifique a internet e tente de novo.');
+  else if (conflito) aviso('Outra pessoa já mexeu neste cartão. O quadro foi atualizado.');
 }
 
-const mover = (id, status, extra) => write(id, () => sb.from('tarefas').update({ status, desde: Date.now(), ...extra }).eq('id', id));
-const excluir = id => write(id, () => sb.from('tarefas').delete().eq('id', id));
+// só move se o cartão ainda estiver na etapa em que a pessoa o viu
+const mover = (t, status, extra) => write(t.id, () => sb.from('tarefas')
+  .update({ status, desde: Date.now(), ...extra }).eq('id', t.id).eq('status', t.status).select('id'));
+const excluir = id => write(id, () => sb.from('tarefas').delete().eq('id', id).select('id'));
+
+// colocar em andamento já abre o campo para assumir; "Pular" deixa aguardando responsável
+const iniciar = t => {
+  editando = { id: t.id, modo: 'testador', pular: true }; draft = { testador: lembrado() };
+  tab = 'teste';
+  mover(t, 'teste', { testador: null });
+};
+const concluir = t => mover(t, 'concluido');
+const devolver = t => mover(t, 'pendente'); // mantém o responsável para mostrar "devolvida por"
+const reabrir = t => mover(t, 'pendente', { testador: null });
+const ACOES = { 'pendente>teste': iniciar, 'teste>concluido': concluir, 'teste>pendente': devolver, 'concluido>pendente': reabrir };
+
+// por que o cartão não pode ir para a coluna; '' = pode
+function motivo(t, para) {
+  const k = t.status + '>' + para;
+  if (k === 'teste>concluido' && !t.testador) return 'Assuma a tarefa antes de concluir.';
+  if (ACOES[k]) return '';
+  return para === 'concluido' ? 'Coloque a tarefa em andamento antes de concluir.' : 'Reabra a tarefa antes de colocar em andamento.';
+}
+console.assert(motivo({ status: 'pendente' }, 'teste') === '' && motivo({ status: 'pendente' }, 'concluido') !== ''
+  && motivo({ status: 'teste', testador: null }, 'concluido') === 'Assuma a tarefa antes de concluir.'
+  && motivo({ status: 'teste', testador: 'Bia' }, 'concluido') === '' && motivo({ status: 'teste' }, 'pendente') === ''
+  && motivo({ status: 'concluido' }, 'pendente') === '' && motivo({ status: 'concluido' }, 'teste') !== '', 'motivo()');
+
+function soltar(t, para) {
+  if (t.status === para) return;
+  const m = motivo(t, para);
+  if (m) aviso(m); else ACOES[t.status + '>' + para](t);
+}
+
 const CAMPOS = {
   testador: [{ k: 'testador', label: 'Quem vai fazer', max: 40, nomes: true }],
   editar: [
@@ -242,12 +302,12 @@ const CAMPOS = {
 const abrir = (t, modo) => {
   editando = { id: t.id, modo };
   draft = modo === 'editar' ? { titulo: t.titulo, autor: t.autor || '' } : { testador: lembrado() };
-  confirming = null; render();
+  confirming = null; menu = null; render();
 };
 
-// campos inline de "Editar", "Assumir" e "Trocar responsável"
+// campos dentro do cartão: "Editar", "Assumir" e "Trocar responsável"
 function campoForm(t) {
-  const { modo } = editando;
+  const { modo, pular } = editando;
   const f = el('form', 'nome-form');
   f.autocomplete = 'off';
   const inputs = CAMPOS[modo].map((c, i) => {
@@ -261,8 +321,9 @@ function campoForm(t) {
     inp.oninput = () => { draft[c.k] = inp.value; };
     return inp;
   });
-  const ok = el('button', 'btn primary', modo === 'editar' ? 'Salvar' : 'Confirmar'); ok.type = 'submit';
-  const no = el('button', 'btn', 'Cancelar'); no.type = 'button';
+  const ok = el('button', 'btn primary', modo === 'editar' ? 'Salvar' : 'Assumir'); ok.type = 'submit';
+  ok.disabled = busy.has(t.id); // enquanto o cartão ainda está sendo movido
+  const no = el('button', 'btn', pular ? 'Pular' : 'Cancelar'); no.type = 'button';
   no.onclick = () => { editando = null; render(); };
   f.onkeydown = e => { if (e.key === 'Escape') no.click(); };
   f.onsubmit = e => {
@@ -270,14 +331,18 @@ function campoForm(t) {
     const dados = Object.fromEntries(inputs.map(i => [i.dataset.k, i.value.trim() || null]));
     if (modo === 'testador') lembrar(dados.testador);
     editando = null;
-    write(t.id, () => sb.from('tarefas').update(dados).eq('id', t.id));
+    write(t.id, () => {
+      let q = sb.from('tarefas').update(dados).eq('id', t.id);
+      if (modo === 'testador') q = q.eq('status', 'teste');
+      return q.select('id');
+    });
   };
   f.append(...inputs, ok, no);
   return f;
 }
 
-function row(t, now) {
-  const li = el('li', 'item');
+function card(t, now) {
+  const li = el('li', 'card');
   const txt = el('div', 'txt');
   txt.append(el('div', 'ttl', t.titulo));
   if (t.status === 'teste' && !t.testador) txt.append(el('div', 'espera', 'Aguardando responsável'));
@@ -285,37 +350,74 @@ function row(t, now) {
   li.append(txt);
   if (editando?.id === t.id) { li.append(campoForm(t)); return li; }
 
-  const acts = el('div', 'acts');
-  const btn = (label, cls, onclick) => {
+  li.draggable = !busy.has(t.id);
+  li.ondragstart = e => {
+    arrastando = t; li.classList.add('arrastando');
+    e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', t.id);
+  };
+
+  const acts = el('div', 'acts'), mais = el('div', 'mais');
+  const btn = (box, label, cls, onclick) => {
     const b = el('button', 'btn ' + cls, label);
     b.type = 'button'; b.disabled = busy.has(t.id); b.onclick = onclick;
-    acts.append(b); return b;
+    box.append(b); return b;
   };
-  if (t.status === 'pendente') btn('Colocar em andamento', 'primary', () => mover(t.id, 'teste', { testador: null }));
-  if (t.status === 'teste' && !t.testador) btn('Assumir', 'primary', () => abrir(t, 'testador'));
-  if (t.status === 'teste' && t.testador) {
-    btn('Concluir', 'ok', () => mover(t.id, 'concluido'));
-    btn('Devolver', '', () => mover(t.id, 'pendente')); // mantém o responsável para mostrar "devolvida por"
-    btn('Trocar responsável', '', () => abrir(t, 'testador'));
-  }
-  if (t.status === 'concluido') btn('Reabrir', '', () => mover(t.id, 'pendente', { testador: null }));
-  btn('Editar', '', () => abrir(t, 'editar'));
+  if (t.status === 'pendente') btn(acts, 'Colocar em andamento', 'primary', () => iniciar(t));
+  if (t.status === 'teste' && !t.testador) btn(acts, 'Assumir', 'primary', () => abrir(t, 'testador'));
+  if (t.status === 'teste' && t.testador) btn(acts, 'Concluir', 'ok', () => concluir(t));
+  if (t.status === 'concluido') btn(acts, 'Reabrir', '', () => reabrir(t));
 
+  const aberto = menu === t.id;
+  const tog = btn(acts, '●●●', 'mais-btn', () => {
+    menu = aberto ? null : t.id; confirming = null; render();
+    $('#quadro').querySelector('[data-menu="' + CSS.escape(t.id) + '"]')?.focus();
+  });
+  tog.dataset.menu = t.id;
+  tog.setAttribute('aria-label', 'Mais ações'); tog.setAttribute('aria-expanded', aberto);
+  li.append(acts);
+  if (!aberto) return li;
+
+  if (t.status === 'teste') btn(mais, 'Devolver', '', () => devolver(t));
+  if (t.status === 'teste' && t.testador) btn(mais, 'Trocar responsável', '', () => abrir(t, 'testador'));
+  btn(mais, 'Editar', '', () => abrir(t, 'editar'));
   const armed = confirming === t.id;
-  const del = btn(armed ? 'Confirmar exclusão' : 'Excluir', 'del' + (armed ? ' armed' : ''), () => {
+  const del = btn(mais, armed ? 'Confirmar exclusão' : 'Excluir', 'del' + (armed ? ' armed' : ''), () => {
     clearTimeout(confirmTimer);
     if (confirming === t.id) { confirming = null; excluir(t.id); return; }
     confirming = t.id;
     confirmTimer = setTimeout(() => { confirming = null; render(); }, 4000);
     render();
-    $('#list').querySelector('[data-del="' + CSS.escape(t.id) + '"]')?.focus();
+    $('#quadro').querySelector('[data-del="' + CSS.escape(t.id) + '"]')?.focus();
   });
   del.dataset.del = t.id;
-  li.append(acts);
+  li.append(mais);
   return li;
 }
 
+// colunas montadas uma vez; o render só troca os cartões
+const COLS = {};
+const limparAlvos = () => document.querySelectorAll('.col').forEach(c => c.classList.remove('alvo', 'proibido'));
+for (const s in ETAPAS) {
+  const col = el('section', 'col'), head = el('div', 'col-head'), n = el('span', 'n');
+  col.dataset.s = s; col.setAttribute('aria-label', ETAPAS[s].nome);
+  head.append(el('h2', null, ETAPAS[s].nome), n);
+  const list = el('ul', 'list'), vazio = el('p', 'vazio');
+  col.append(head, el('p', 'dica', ETAPAS[s].dica), list, vazio);
+  col.ondragover = e => {
+    if (!arrastando || arrastando.status === s) return;
+    e.preventDefault(); // aceita a soltura mesmo quando proibida, para explicar o motivo
+    const m = motivo(arrastando, s);
+    col.classList.toggle('alvo', !m); col.classList.toggle('proibido', !!m);
+  };
+  col.ondragleave = e => { if (!col.contains(e.relatedTarget)) col.classList.remove('alvo', 'proibido'); };
+  col.ondrop = e => { e.preventDefault(); const t = arrastando; arrastando = null; limparAlvos(); if (t) soltar(t, s); };
+  $('#quadro').append(col);
+  COLS[s] = { col, n, list, vazio };
+}
+document.addEventListener('dragend', () => { arrastando = null; limparAlvos(); render(); });
+
 function render() {
+  if (arrastando) return; // não recria o cartão que está sendo arrastado
   const now = Date.now();
   const nomes = [...new Set(tasks.flatMap(t => [t.autor, t.testador]).filter(Boolean))].sort();
   $('#nomes').replaceChildren(...nomes.map(n => { const o = el('option'); o.value = n; return o; }));
@@ -329,20 +431,19 @@ function render() {
   }
   sel.value = pessoa;
   const vis = tasks.filter(t => daPessoa(t, pessoa));
-
-  for (const s in ETAPAS) {
-    $('#n-' + s).textContent = loaded ? vis.filter(t => t.status === s).length : '–';
-    $('#tab-' + s).setAttribute('aria-pressed', s === tab);
-  }
-  $('#board').dataset.s = tab;
-  $('#dica').textContent = ETAPAS[tab].dica;
   $('#add').hidden = !loaded;
 
-  const rows = vis.filter(t => t.status === tab)
-    .sort((a, b) => tab === 'concluido' ? b.desde - a.desde : a.desde - b.desde);
-  $('#list').replaceChildren(...rows.map(t => row(t, now)));
-  $('#vazio').textContent = pessoa ? 'Nada criado por ' + pessoa + ' nesta etapa.' : ETAPAS[tab].vazio;
-  $('#vazio').hidden = !loaded || rows.length > 0;
+  for (const s in ETAPAS) {
+    const c = COLS[s];
+    const rows = vis.filter(t => t.status === s)
+      .sort((a, b) => s === 'concluido' ? b.desde - a.desde : a.desde - b.desde);
+    c.n.textContent = $('#n-' + s).textContent = loaded ? rows.length : '–';
+    $('#tab-' + s).setAttribute('aria-pressed', s === tab);
+    c.col.classList.toggle('ativa', s === tab);
+    c.list.replaceChildren(...rows.map(t => card(t, now)));
+    c.vazio.textContent = pessoa ? 'Nada criado por ' + pessoa + '.' : ETAPAS[s].vazio;
+    c.vazio.hidden = !loaded || rows.length > 0;
+  }
 
   // o re-render recria o campo de nome; devolve o foco se ele se perdeu
   const campo = $('#campo-inline');
@@ -350,9 +451,9 @@ function render() {
   else if (campo && document.activeElement === document.body) campo.focus();
 }
 
-document.querySelectorAll('.tab').forEach(b => b.onclick = () => { tab = b.dataset.s; confirming = null; editando = null; render(); });
+document.querySelectorAll('.tab').forEach(b => b.onclick = () => { tab = b.dataset.s; confirming = null; editando = null; menu = null; render(); });
 $('#autor').value = lembrado();
-$('#pessoa').onchange = e => { pessoa = e.target.value; lembrar(pessoa, FILTRO); confirming = null; editando = null; render(); };
+$('#pessoa').onchange = e => { pessoa = e.target.value; lembrar(pessoa, FILTRO); confirming = null; editando = null; menu = null; render(); };
 
 $('#add').onsubmit = async e => {
   e.preventDefault();
@@ -364,7 +465,7 @@ $('#add').onsubmit = async e => {
   const now = Date.now();
   inp.value = ''; tab = 'pendente';
   const { error } = await sb.from('tarefas').insert({ titulo, autor, status: 'pendente', criado: now, desde: now });
-  if (error) { inp.value = titulo; say('Não foi possível salvar. Verifique a internet e tente de novo.'); }
+  if (error) { inp.value = titulo; aviso('Não foi possível salvar. Verifique a internet e tente de novo.'); }
   await carregar();
 };
 
@@ -380,7 +481,7 @@ $('#exportar').onclick = () => {
 sb.channel('tarefas').on('postgres_changes', { event: '*', schema: 'public', table: 'tarefas' }, carregar).subscribe();
 // rede de segurança caso o realtime caia
 addEventListener('focus', carregar);
-setInterval(() => { if (!$('#list').contains(document.activeElement)) render(); }, 60000);
+setInterval(() => { if (!$('#quadro').contains(document.activeElement)) render(); }, 60000);
 setInterval(carregar, 120000);
 render();
 carregar();
