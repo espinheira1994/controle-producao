@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Mono:wght@500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
 <style>
-/* Layout: uma coluna estreita — título, etapas em sequência (Pendências › Teste › Concluído), campo de nova tarefa, painel com as tarefas da etapa */
+/* Layout: uma coluna estreita — título, etapas em sequência (Pendências › Em andamento › Concluído), campo de nova tarefa, painel com as tarefas da etapa */
 :root {
   /* tema único vermelho e preto, pedido do usuário */
   --bg: #0b0909; --surface: #151212; --ink: #f4f1f1; --muted: #a39a9a; --line: #2e2626;
@@ -125,7 +125,7 @@ h1 span { color: var(--accent); }
   <nav class="tabs" aria-label="Etapas">
     <button class="tab" type="button" id="tab-pendente" data-s="pendente" aria-pressed="true"><span class="lbl">Pendências</span><span class="n" id="n-pendente">0</span></button>
     <span class="arrow" aria-hidden="true">›</span>
-    <button class="tab" type="button" id="tab-teste" data-s="teste" aria-pressed="false"><span class="lbl">Teste</span><span class="n" id="n-teste">0</span></button>
+    <button class="tab" type="button" id="tab-teste" data-s="teste" aria-pressed="false"><span class="lbl">Em andamento</span><span class="n" id="n-teste">0</span></button>
     <span class="arrow" aria-hidden="true">›</span>
     <button class="tab" type="button" id="tab-concluido" data-s="concluido" aria-pressed="false"><span class="lbl">Concluído</span><span class="n" id="n-concluido">0</span></button>
   </nav>
@@ -161,9 +161,9 @@ h1 span { color: var(--accent); }
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <script>
 const ETAPAS = {
-  pendente: { dica: 'A fazer. Quando terminar, envie para teste.', vazio: 'Nenhuma pendência. Adicione a primeira tarefa no campo acima.' },
-  teste: { dica: 'Em verificação. Aprove para concluir ou reprove para voltar às pendências.', vazio: 'Nada em teste. Envie uma pendência para teste quando ela estiver pronta.' },
-  concluido: { dica: 'Tarefas aprovadas no teste.', vazio: 'Nada concluído ainda. Tarefas aprovadas no teste aparecem aqui.' },
+  pendente: { dica: 'A fazer. Quando começar, coloque em andamento.', vazio: 'Nenhuma pendência. Adicione a primeira tarefa no campo acima.' },
+  teste: { dica: 'Sendo feitas. Conclua quando terminar ou devolva para as pendências.', vazio: 'Nada em andamento. Coloque uma pendência em andamento quando começar.' },
+  concluido: { dica: 'Tarefas concluídas.', vazio: 'Nada concluído ainda. Tarefas finalizadas aparecem aqui.' },
 };
 // chave pública (anon): o acesso é livre com o link, escolha do usuário
 const sb = supabase.createClient('https://htmyouchcethefvrygpk.supabase.co', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh0bXlvdWNoY2V0aGVmdnJ5Z3BrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQyOTQ2NTQsImV4cCI6MjEwOTg3MDY1NH0.NACTRMN9mB8uCdSH4Gf5zy_oYhxT5CakFA1oDpIHvx8');
@@ -190,15 +190,16 @@ function dur(ms) {
 console.assert(dur(0) === 'menos de 1 min' && dur(5 * 60000) === '5 min' && dur(90 * 60000) === '1 h' && dur(26 * 3600000) === '1 d 2 h', 'dur()');
 const data = ts => new Date(ts).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 
-// testador em pendência = quem reprovou; em concluído = quem aprovou
+// status 'teste' e coluna testador mantidos no banco; na tela são "em andamento" e "responsável"
+// responsável em pendência = quem devolveu; em concluído = quem fez
 function quem(t) {
-  if (t.status === 'teste') return t.testador ? ['testando: ' + t.testador] : [];
-  return [t.autor && 'criada por ' + t.autor, t.testador && (t.status === 'pendente' ? 'reprovada por ' : 'testada por ') + t.testador].filter(Boolean);
+  if (t.status === 'teste') return t.testador ? ['responsável: ' + t.testador] : [];
+  return [t.autor && 'criada por ' + t.autor, t.testador && (t.status === 'pendente' ? 'devolvida por ' : 'feita por ') + t.testador].filter(Boolean);
 }
-console.assert(quem({ status: 'pendente', autor: 'Ana', testador: 'Bia' }).join('|') === 'criada por Ana|reprovada por Bia'
+console.assert(quem({ status: 'pendente', autor: 'Ana', testador: 'Bia' }).join('|') === 'criada por Ana|devolvida por Bia'
   && quem({ status: 'pendente', autor: null, testador: null }).length === 0
   && quem({ status: 'teste', testador: null }).length === 0
-  && quem({ status: 'concluido', autor: 'Ana', testador: 'Bia' })[1] === 'testada por Bia', 'quem()');
+  && quem({ status: 'concluido', autor: 'Ana', testador: 'Bia' })[1] === 'feita por Bia', 'quem()');
 
 function meta(t, now) {
   const tempo = t.status === 'concluido'
@@ -232,7 +233,7 @@ async function write(id, fn) {
 const mover = (id, status, extra) => write(id, () => sb.from('tarefas').update({ status, desde: Date.now(), ...extra }).eq('id', id));
 const excluir = id => write(id, () => sb.from('tarefas').delete().eq('id', id));
 const CAMPOS = {
-  testador: [{ k: 'testador', label: 'Quem vai testar', max: 40, nomes: true }],
+  testador: [{ k: 'testador', label: 'Quem vai fazer', max: 40, nomes: true }],
   editar: [
     { k: 'titulo', label: 'Título da tarefa', max: 200 },
     { k: 'autor', label: 'Criada por (vazio = sem nome)', max: 40, nomes: true, opcional: true },
@@ -244,7 +245,7 @@ const abrir = (t, modo) => {
   confirming = null; render();
 };
 
-// campos inline de "Editar", "Assumir teste" e "Trocar testador"
+// campos inline de "Editar", "Assumir" e "Trocar responsável"
 function campoForm(t) {
   const { modo } = editando;
   const f = el('form', 'nome-form');
@@ -279,7 +280,7 @@ function row(t, now) {
   const li = el('li', 'item');
   const txt = el('div', 'txt');
   txt.append(el('div', 'ttl', t.titulo));
-  if (t.status === 'teste' && !t.testador) txt.append(el('div', 'espera', 'Aguardando testador'));
+  if (t.status === 'teste' && !t.testador) txt.append(el('div', 'espera', 'Aguardando responsável'));
   txt.append(el('div', 'meta', meta(t, now)));
   li.append(txt);
   if (editando?.id === t.id) { li.append(campoForm(t)); return li; }
@@ -290,12 +291,12 @@ function row(t, now) {
     b.type = 'button'; b.disabled = busy.has(t.id); b.onclick = onclick;
     acts.append(b); return b;
   };
-  if (t.status === 'pendente') btn('Enviar para teste', 'primary', () => mover(t.id, 'teste', { testador: null }));
-  if (t.status === 'teste' && !t.testador) btn('Assumir teste', 'primary', () => abrir(t, 'testador'));
+  if (t.status === 'pendente') btn('Colocar em andamento', 'primary', () => mover(t.id, 'teste', { testador: null }));
+  if (t.status === 'teste' && !t.testador) btn('Assumir', 'primary', () => abrir(t, 'testador'));
   if (t.status === 'teste' && t.testador) {
-    btn('Aprovar', 'ok', () => mover(t.id, 'concluido'));
-    btn('Reprovar', '', () => mover(t.id, 'pendente')); // mantém o testador para mostrar "reprovada por"
-    btn('Trocar testador', '', () => abrir(t, 'testador'));
+    btn('Concluir', 'ok', () => mover(t.id, 'concluido'));
+    btn('Devolver', '', () => mover(t.id, 'pendente')); // mantém o responsável para mostrar "devolvida por"
+    btn('Trocar responsável', '', () => abrir(t, 'testador'));
   }
   if (t.status === 'concluido') btn('Reabrir', '', () => mover(t.id, 'pendente', { testador: null }));
   btn('Editar', '', () => abrir(t, 'editar'));
